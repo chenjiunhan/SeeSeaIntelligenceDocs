@@ -1,10 +1,21 @@
-# SeeSeaAgent 技術架構文件
+# SeeSea Intelligence 技術架構文件
 
 **現代化、高性能、高併發的全球航運情報分析系統**
 
-Version: 2.0
+Version: 3.0
 Last Updated: 2026-02-07
 Domain: https://seesea.ai
+
+## 📦 專案架構
+
+本專案採用 **多倉庫架構（Multi-Repo）**，拆分為四個獨立專案：
+
+| 專案名稱 | 職責 | 技術棧 | Repository |
+|---------|------|--------|-----------|
+| **SeeSeaIntelligence** | 資料收集與處理 | Python 3.12 (爬蟲、ETL、資料處理) | `/SeeSeaIntelligence` |
+| **SeeSeaIntelligenceAgent** | AI 分析與智能代理 | Python 3.12 + LangGraph + FastAPI | `/SeeSeaIntelligenceAgent` |
+| **SeeSeaIntelligenceAPI** | 高性能資料查詢 | Go 1.21 + Gin Framework | `/SeeSeaIntelligenceAPI` |
+| **SeeSeaIntelligenceWeb** | 前端展示與互動 | Next.js 15 + React 18 + TypeScript | `/SeeSeaIntelligenceWeb` |
 
 ---
 
@@ -24,12 +35,13 @@ Domain: https://seesea.ai
 
 ### 後端技術棧（混合架構）
 
-| 技術 | 版本 | 用途 |
-|------|------|------|
-| **高性能 API** | Go 1.21 + Gin | 資料查詢 API (70% 流量) |
-| **分析 API** | Python 3.12 + FastAPI | 複雜分析、LangGraph Agent (30% 流量) |
-| **API Gateway** | Nginx | 反向代理、負載均衡、SSL 終止 |
-| **WebSocket** | Go Gorilla WebSocket | 即時資料推送 |
+| 專案 | 技術 | 版本 | 用途 |
+|------|------|------|------|
+| **SeeSeaIntelligence** | Python + APScheduler | 3.12 | 資料收集爬蟲、資料處理、ETL Pipeline |
+| **SeeSeaIntelligenceAPI** | Go + Gin | 1.21 | 高性能資料查詢 API (70% 流量) |
+| **SeeSeaIntelligenceAgent** | Python + FastAPI + LangGraph | 3.12 | 複雜分析、AI Agent (30% 流量) |
+| **API Gateway** | Nginx | Latest | 反向代理、負載均衡、SSL 終止 |
+| **WebSocket** | Go Gorilla WebSocket | Latest | 即時資料推送 |
 
 ### 資料層技術棧（雙資料庫架構）
 
@@ -57,111 +69,117 @@ Domain: https://seesea.ai
 
 ## 🏗️ 系統架構圖
 
-### 完整部署架構
+### 完整部署架構（多專案整合）
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  使用者瀏覽器 (全球)                          │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│              前端：https://seesea.ai                         │
-│              Vercel CDN (全球 300+ 節點)                     │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │ • Next.js 15 + React 18                              │   │
-│  │ • D3.js + Visx 圖表                                   │   │
-│  │ • Mapbox GL + Deck.gl 地圖                           │   │
-│  │ • TanStack Query (自動快取)                          │   │
-│  │ • 自動 HTTPS、圖片優化、Code Splitting               │   │
-│  └──────────────────────────────────────────────────────┘   │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         │ HTTPS API 請求
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│          GoDaddy DNS: seesea.ai                              │
-│                                                              │
-│  DNS 記錄:                                                   │
-│  • seesea.ai           → Vercel (CNAME)                     │
-│  • api.seesea.ai       → EC2 IP (A Record)                  │
-│  • ws.seesea.ai        → EC2 IP (A Record, WebSocket)       │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│          後端：https://api.seesea.ai                         │
-│          AWS EC2 主機 (您的伺服器)                           │
-│                                                              │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │             Nginx (Port 80/443)                        │ │
-│  │  • 反向代理                                             │ │
-│  │  • SSL 終止 (Let's Encrypt)                            │ │
-│  │  • 路由規則:                                            │ │
-│  │    - /api/v1/vessels/*     → Go API                   │ │
-│  │    - /api/v1/analytics/*   → Python API               │ │
-│  │    - /api/v1/chat/*        → Python API (LangGraph)   │ │
-│  │    - /ws/*                 → Go WebSocket             │ │
-│  └────────────┬───────────────────────┬───────────────────┘ │
-│               │                       │                     │
-│               ▼                       ▼                     │
-│  ┌──────────────────────┐   ┌────────────────────────────┐ │
-│  │   Go API Server      │   │  Python API Server         │ │
-│  │   (Gin Framework)    │   │  (FastAPI)                 │ │
-│  │   Port: 8080         │   │  Port: 8000                │ │
-│  │                      │   │                            │ │
-│  │  職責:                │   │  職責:                      │ │
-│  │  • 資料查詢 API       │   │  • 複雜統計分析             │ │
-│  │  • WebSocket 推送    │   │  • LangGraph Agent         │ │
-│  │  • 高頻查詢優化      │   │  • 報表生成                │ │
-│  │  • 快取管理          │   │  • ETL Pipeline            │ │
-│  └──────────┬───────────┘   └────────────┬───────────────┘ │
-│             │                            │                 │
-│             └────────────┬───────────────┘                 │
-│                          │                                 │
-│           ┌──────────────┼──────────────┐                  │
-│           │              │              │                  │
-│           ▼              ▼              ▼                  │
-│  ┌────────────────┐ ┌───────────┐ ┌──────────────┐        │
-│  │ PostgreSQL 16  │ │ClickHouse │ │ Redis 7      │        │
-│  │ + TimescaleDB  │ │   24      │ │              │        │
-│  │ Port: 5432     │ │Port: 9000 │ │ Port: 6379   │        │
-│  │                │ │           │ │              │        │
-│  │ • 即時寫入     │ │ • 歷史分析│ │ • 查詢快取   │        │
-│  │ • CRUD 操作    │ │ • 聚合查詢│ │ • Session    │        │
-│  │ • 熱數據(30天) │ │ • 全時段  │ │ • Pub/Sub    │        │
-│  └────────┬───────┘ └─────▲─────┘ └──────────────┘        │
-│           │               │                                │
-│           │    ┌──────────┴────────┐                       │
-│           │    │  ETL Pipeline     │                       │
-│           └───►│  (每日凌晨 2:00)   │                       │
-│                │  PG → ClickHouse  │                       │
-│                └───────────────────┘                       │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      使用者瀏覽器 (全球)                              │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              前端：https://seesea.ai                                 │
+│              Vercel CDN (全球 300+ 節點)                             │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │         SeeSeaIntelligenceWeb                                  │ │
+│  │  • Next.js 15 + React 18 + TypeScript                          │ │
+│  │  • D3.js + Visx 圖表                                            │ │
+│  │  • Mapbox GL + Deck.gl 地圖                                    │ │
+│  │  • TanStack Query (自動快取)                                   │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │ HTTPS API 請求
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│          GoDaddy DNS: seesea.ai                                      │
+│  • seesea.ai         → Vercel (CNAME)                               │
+│  • api.seesea.ai     → EC2 IP (A Record)                            │
+│  • ws.seesea.ai      → EC2 IP (A Record, WebSocket)                 │
+└──────────────────────────────┬──────────────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│              後端：AWS EC2 主機                                       │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐  │
+│  │                    Nginx (Port 80/443)                        │  │
+│  │  • 反向代理 + SSL 終止 (Let's Encrypt)                         │  │
+│  │  • 路由規則:                                                   │  │
+│  │    - /api/v1/vessels/*     → SeeSeaIntelligenceAPI           │  │
+│  │    - /api/v1/analytics/*   → SeeSeaIntelligenceAgent         │  │
+│  │    - /api/v1/chat/*        → SeeSeaIntelligenceAgent         │  │
+│  │    - /ws/*                 → SeeSeaIntelligenceAPI           │  │
+│  └──────────────────┬────────────────────────┬───────────────────┘  │
+│                     │                        │                      │
+│                     ▼                        ▼                      │
+│  ┌─────────────────────────────┐  ┌──────────────────────────────┐ │
+│  │  SeeSeaIntelligenceAPI      │  │  SeeSeaIntelligenceAgent     │ │
+│  │  (Go + Gin)                 │  │  (Python + FastAPI)          │ │
+│  │  Port: 8080                 │  │  Port: 8000                  │ │
+│  │                             │  │                              │ │
+│  │  職責:                       │  │  職責:                        │ │
+│  │  • 高性能資料查詢 API        │  │  • 複雜統計分析               │ │
+│  │  • WebSocket 即時推送       │  │  • LangGraph AI Agent        │ │
+│  │  • 快取管理                 │  │  • 自然語言查詢               │ │
+│  │  • 高併發處理               │  │  • 報表生成                  │ │
+│  └────────┬────────────────────┘  └────────────┬─────────────────┘ │
+│           │                                    │                   │
+│           └────────────────┬───────────────────┘                   │
+│                            │                                       │
+│            ┌───────────────┼────────────────┐                      │
+│            │               │                │                      │
+│            ▼               ▼                ▼                      │
+│   ┌───────────────┐ ┌────────────┐ ┌──────────────┐               │
+│   │ PostgreSQL 16 │ │ ClickHouse │ │  Redis 7     │               │
+│   │ + TimescaleDB │ │     24     │ │              │               │
+│   │ Port: 5432    │ │ Port: 9000 │ │  Port: 6379  │               │
+│   │               │ │            │ │              │               │
+│   │ • 即時寫入    │ │ • 歷史分析 │ │ • 查詢快取   │               │
+│   │ • 熱數據(30天)│ │ • 全時段   │ │ • Pub/Sub    │               │
+│   └───────▲───────┘ └──────▲─────┘ └──────────────┘               │
+│           │                │                                       │
+│           │                │                                       │
+│           │      ┌─────────┴──────────┐                            │
+│           │      │  ETL Pipeline      │                            │
+│           │      │  (每日 2:00)        │                            │
+│           │      │  PG → ClickHouse   │                            │
+│           │      └────────────────────┘                            │
+│           │                                                        │
+│           │      ┌─────────────────────────────────────────────┐   │
+│           └──────┤   SeeSeaIntelligence                        │   │
+│                  │   (Python 資料收集與處理)                    │   │
+│                  │                                             │   │
+│                  │  • IMF PortWatch 爬蟲                       │   │
+│                  │  • 資料清洗與處理                            │   │
+│                  │  • CSV 備份與版本控制                       │   │
+│                  │  • ETL Pipeline (CSV → PostgreSQL)          │   │
+│                  │  • APScheduler 定時任務                     │   │
+│                  └─────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### 資料流程架構
+### 資料流程架構（多專案協作）
 
 ```
-1️⃣ 資料收集層
+1️⃣ 資料收集層 (SeeSeaIntelligence)
    IMF PortWatch API
         ↓
-   Python Scraper (src/collectors/)
+   Python Scraper (collectors/imf_portwatch.py)
         ↓
    Pickle Files (data/logistics/chokepoints/)
         ↓
 
-2️⃣ 資料處理層
-   DataProcessor (src/core/processor.py)
+2️⃣ 資料處理層 (SeeSeaIntelligence)
+   DataProcessor (core/processor.py)
         ↓
    CSV Files (processed/) ← 原始資料備份，可重新處理
         ↓
 
 3️⃣ 資料庫層（雙庫協作）
-   ETL Pipeline (etl/jobs/csv_to_postgres.py)
+   ETL Pipeline (SeeSeaIntelligence/etl/)
         ↓
    PostgreSQL (即時寫入、熱數據、CRUD)
-        ↓ (每日凌晨 2:00 同步，etl/jobs/pg_to_clickhouse.py)
+        ↓ (每日凌晨 2:00 同步)
    ClickHouse (歷史分析、複雜聚合、全時段)
         ↓
 
@@ -170,12 +188,13 @@ Domain: https://seesea.ai
         ↓
 
 5️⃣ API 層（智能路由）
-   ┌─ 簡單查詢 (< 30 天) → Go API → PostgreSQL
-   ├─ 複雜分析 (> 90 天) → Python API → ClickHouse
-   └─ 即時推送 → Go WebSocket → Redis Pub/Sub
+   ┌─ 簡單查詢 (< 30 天) → SeeSeaIntelligenceAPI (Go) → PostgreSQL
+   ├─ 複雜分析 (> 90 天) → SeeSeaIntelligenceAgent (Python) → ClickHouse
+   ├─ AI 自然語言查詢 → SeeSeaIntelligenceAgent (LangGraph) → ClickHouse
+   └─ 即時推送 → SeeSeaIntelligenceAPI (WebSocket) → Redis Pub/Sub
         ↓
 
-6️⃣ 應用層
+6️⃣ 應用層 (SeeSeaIntelligenceWeb)
    Next.js Frontend (Vercel CDN)
         ↓
    使用者瀏覽器
@@ -183,10 +202,173 @@ Domain: https://seesea.ai
 
 ---
 
-## 📁 專案目錄結構
+## 📁 專案目錄結構（多倉庫架構）
+
+### 專案總覽
 
 ```
-SeeSeaAgent/
+SeeSea/
+│
+├── SeeSeaIntelligence/               # 資料收集與處理專案
+├── SeeSeaIntelligenceAgent/          # AI 分析與智能代理專案
+├── SeeSeaIntelligenceAPI/            # 高性能 API 專案
+├── SeeSeaIntelligenceWeb/            # 前端專案
+└── SeeSeaIntelligenceDocs/           # 文件專案
+```
+
+---
+
+### 1️⃣ SeeSeaIntelligence（資料收集與處理）
+
+```
+SeeSeaIntelligence/
+│
+├── collectors/                       # 資料收集爬蟲
+│   ├── __init__.py
+│   └── imf_portwatch.py             # IMF PortWatch 爬蟲
+│
+├── core/                            # 核心功能
+│   ├── collector.py                 # 收集器基類
+│   ├── processor.py                 # 資料處理器
+│   ├── backfill.py                  # 歷史資料回填
+│   └── logger.py                    # 日誌管理
+│
+├── etl/                             # ETL Pipeline
+│   ├── jobs/
+│   │   ├── csv_to_postgres.py      # CSV → PostgreSQL
+│   │   ├── pg_to_clickhouse.py     # PostgreSQL → ClickHouse
+│   │   ├── data_aggregation.py     # 資料聚合
+│   │   └── data_cleaning.py        # 資料清洗
+│   └── scheduler.py                 # APScheduler 任務調度
+│
+├── logistics/                       # 航道配置
+│   └── chokepoints/
+│       ├── bab-el-mandeb/
+│       ├── suez-canal/
+│       ├── strait-of-hormuz/
+│       ├── bosporus-strait/
+│       ├── panama-canal/
+│       └── strait-of-malacca/
+│
+├── data/                            # 原始 Pickle 資料
+│   └── logistics/chokepoints/
+│
+├── processed/                       # CSV 備份資料
+│   └── logistics/chokepoints/
+│       └── {chokepoint}/
+│           └── vessel_arrivals/
+│               └── vessel_arrivals.csv
+│
+├── config/                          # 配置文件
+│   ├── config.yaml
+│   └── database.yaml
+│
+├── tests/                           # 測試
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+---
+
+### 2️⃣ SeeSeaIntelligenceAgent（AI 分析與智能代理）
+
+```
+SeeSeaIntelligenceAgent/
+│
+├── app/
+│   ├── main.py                      # FastAPI 入口
+│   │
+│   ├── routers/                     # API 路由
+│   │   ├── analytics.py            # 分析 API
+│   │   ├── chat.py                 # LangGraph Agent 對話
+│   │   └── reports.py              # 報表生成
+│   │
+│   ├── services/                    # 業務邏輯
+│   │   ├── analytics_service.py    # 分析服務
+│   │   ├── agent_service.py        # Agent 服務
+│   │   └── langgraph_agent.py      # LangGraph Agent 實作
+│   │
+│   ├── models/                      # Pydantic Models
+│   │   └── schemas.py
+│   │
+│   ├── database/                    # 資料庫連接
+│   │   ├── postgres.py
+│   │   ├── clickhouse.py
+│   │   └── redis.py
+│   │
+│   └── core/
+│       ├── config.py
+│       └── logger.py
+│
+├── agents/                          # LangGraph Agents
+│   ├── shipping_analyst.py         # 航運分析 Agent
+│   ├── trend_analyzer.py           # 趨勢分析 Agent
+│   └── report_generator.py         # 報表生成 Agent
+│
+├── tools/                           # Agent 工具
+│   ├── query_tools.py              # 資料查詢工具
+│   ├── analysis_tools.py           # 分析工具
+│   └── visualization_tools.py      # 可視化工具
+│
+├── tests/
+├── requirements.txt
+├── Dockerfile
+└── README.md
+```
+
+---
+
+### 3️⃣ SeeSeaIntelligenceAPI（高性能 API）
+
+```
+SeeSeaIntelligenceAPI/
+│
+├── cmd/
+│   └── server/
+│       └── main.go                  # 程式入口
+│
+├── internal/
+│   ├── handlers/                    # HTTP Handlers
+│   │   ├── vessels.go              # 船隻資料 API
+│   │   ├── realtime.go             # 即時資料 API
+│   │   └── websocket.go            # WebSocket Handler
+│   │
+│   ├── services/                    # 業務邏輯
+│   │   ├── vessel_service.go
+│   │   └── cache_service.go
+│   │
+│   ├── models/                      # 資料模型
+│   │   └── vessel.go
+│   │
+│   ├── database/                    # 資料庫連接
+│   │   ├── postgres.go
+│   │   ├── clickhouse.go
+│   │   └── redis.go
+│   │
+│   └── middleware/                  # 中介軟體
+│       ├── cors.go
+│       ├── logger.go
+│       └── ratelimit.go
+│
+├── pkg/                             # 公共套件
+│   └── utils/
+│
+├── configs/                         # 配置文件
+│   └── config.yaml
+│
+├── go.mod
+├── go.sum
+├── Dockerfile
+└── README.md
+```
+
+---
+
+### 4️⃣ SeeSeaIntelligenceWeb（前端專案）
+
+```
+SeeSeaIntelligenceWeb/
 │
 ├── web/                              # 前端專案 (Next.js)
 │   ├── app/                          # App Router
@@ -334,45 +516,9 @@ SeeSeaAgent/
 │       └── grafana/
 │           └── dashboards/
 │
-├── src/                             # 現有資料收集系統
-│   ├── collectors/                 # 資料爬蟲
-│   │   ├── __init__.py
-│   │   └── imf_portwatch.py
-│   ├── core/                       # 核心功能
-│   │   ├── collector.py
-│   │   ├── processor.py
-│   │   ├── backfill.py
-│   │   └── logger.py
-│   ├── logistics/chokepoints/      # 航道配置
-│   │   ├── bab-el-mandeb/
-│   │   ├── suez-canal/
-│   │   ├── strait-of-hormuz/
-│   │   ├── bosporus-strait/
-│   │   ├── panama-canal/
-│   │   └── strait-of-malacca/
-│   └── scheduler.py                # 定期收集排程
-│
-├── processed/                       # CSV 備份資料
-│   └── logistics/chokepoints/
-│       └── {chokepoint}/
-│           └── vessel_arrivals/
-│               └── vessel_arrivals.csv
-│
-├── data/                            # 原始 Pickle 資料
-├── notebooks/                       # Jupyter 分析 Notebook
-├── docs/                            # 文件
-│
-├── .github/
-│   └── workflows/
-│       ├── frontend-deploy.yml
-│       ├── backend-deploy.yml
-│       └── tests.yml
-│
+├── tests/                           # 測試
 ├── .env.example
-├── .gitignore
-├── README.md
-├── TECH_STACK.md                    # 本文件
-└── package.json                     # Monorepo 配置
+└── README.md
 ```
 
 ---
@@ -931,10 +1077,10 @@ services:
     networks:
       - seesea-network
 
-  # Go API (高性能查詢)
+  # SeeSeaIntelligenceAPI (Go - 高性能查詢)
   api-go:
     build:
-      context: ./api-go
+      context: ../SeeSeaIntelligenceAPI
       dockerfile: Dockerfile
     container_name: seesea-api-go
     ports:
@@ -957,10 +1103,10 @@ services:
       timeout: 10s
       retries: 3
 
-  # Python API (分析服務)
+  # SeeSeaIntelligenceAgent (Python - AI 分析服務)
   api-python:
     build:
-      context: ./api-python
+      context: ../SeeSeaIntelligenceAgent
       dockerfile: Dockerfile
     container_name: seesea-api-python
     ports:
@@ -982,6 +1128,25 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # SeeSeaIntelligence (資料收集與 ETL)
+  data-collector:
+    build:
+      context: ../SeeSeaIntelligence
+      dockerfile: Dockerfile
+    container_name: seesea-data-collector
+    environment:
+      - POSTGRES_URL=postgresql://admin:${POSTGRES_PASSWORD}@postgres:5432/seesea
+      - CLICKHOUSE_URL=http://clickhouse:8123
+    volumes:
+      - ../SeeSeaIntelligence/data:/app/data
+      - ../SeeSeaIntelligence/processed:/app/processed
+    depends_on:
+      - postgres
+      - clickhouse
+    restart: unless-stopped
+    networks:
+      - seesea-network
 
   # PostgreSQL + TimescaleDB
   postgres:
@@ -1046,21 +1211,6 @@ services:
       timeout: 3s
       retries: 3
 
-  # ETL Pipeline
-  etl:
-    build:
-      context: ./etl
-      dockerfile: Dockerfile
-    container_name: seesea-etl
-    environment:
-      - POSTGRES_URL=postgresql://admin:${POSTGRES_PASSWORD}@postgres:5432/seesea
-      - CLICKHOUSE_URL=http://clickhouse:8123
-    depends_on:
-      - postgres
-      - clickhouse
-    restart: unless-stopped
-    networks:
-      - seesea-network
 
   # Prometheus 監控
   prometheus:
@@ -1296,15 +1446,27 @@ ssh -i your-key.pem ubuntu@54.123.45.67
 ### Step 3: Clone 專案並設定環境
 
 ```bash
-# Clone 專案
-git clone https://github.com/your-org/SeeSeaAgent.git
-cd SeeSeaAgent
+# 建立專案目錄
+mkdir -p ~/SeeSea
+cd ~/SeeSea
 
-# 建立環境變數檔案
-cp .env.example .env
-nano .env
+# Clone 所有專案
+git clone https://github.com/your-org/SeeSeaIntelligence.git
+git clone https://github.com/your-org/SeeSeaIntelligenceAgent.git
+git clone https://github.com/your-org/SeeSeaIntelligenceAPI.git
+git clone https://github.com/your-org/SeeSeaIntelligenceWeb.git
+git clone https://github.com/your-org/SeeSeaIntelligenceDocs.git
 
-# 編輯 .env（填入以下內容）:
+# 設定環境變數（每個專案都需要）
+cd SeeSeaIntelligence && cp .env.example .env && cd ..
+cd SeeSeaIntelligenceAgent && cp .env.example .env && cd ..
+cd SeeSeaIntelligenceAPI && cp .env.example .env && cd ..
+cd SeeSeaIntelligenceWeb && cp .env.example .env && cd ..
+
+# 編輯共用環境變數
+nano ~/SeeSea/.env.shared
+
+# 填入以下內容:
 # POSTGRES_PASSWORD=your_secure_password_here
 # CLICKHOUSE_PASSWORD=your_secure_password_here
 # REDIS_PASSWORD=your_secure_password_here
@@ -1338,9 +1500,9 @@ sudo crontab -e
 ### Step 5: 啟動後端服務
 
 ```bash
-cd /home/ubuntu/SeeSeaAgent/infrastructure/docker
+cd ~/SeeSea/SeeSeaIntelligenceDocs/infrastructure/docker
 
-# 啟動所有服務
+# 啟動所有服務（會自動建置所有專案）
 docker-compose up -d
 
 # 查看狀態
@@ -1350,18 +1512,18 @@ docker-compose ps
 docker-compose logs -f
 
 # 檢查健康狀態
-curl http://localhost:8080/health  # Go API
-curl http://localhost:8000/health  # Python API
+curl http://localhost:8080/health  # SeeSeaIntelligenceAPI (Go)
+curl http://localhost:8000/health  # SeeSeaIntelligenceAgent (Python)
 ```
 
 ### Step 6: 初始化資料庫
 
 ```bash
-# 導入歷史 CSV 資料到 PostgreSQL
-docker-compose exec api-python python /app/etl/jobs/csv_to_postgres.py --full
+# 導入歷史 CSV 資料到 PostgreSQL（在 SeeSeaIntelligence 容器中執行）
+docker-compose exec data-collector python /app/etl/jobs/csv_to_postgres.py --full
 
 # 同步到 ClickHouse
-docker-compose exec api-python python /app/etl/jobs/pg_to_clickhouse.py --full
+docker-compose exec data-collector python /app/etl/jobs/pg_to_clickhouse.py --full
 
 # 驗證資料
 docker-compose exec postgres psql -U admin -d seesea -c "SELECT COUNT(*) FROM vessel_arrivals;"
@@ -1373,7 +1535,7 @@ docker-compose exec clickhouse clickhouse-client --query "SELECT COUNT(*) FROM v
 ```bash
 # 在本地電腦（不是 EC2）
 
-cd web
+cd SeeSeaIntelligenceWeb
 
 # 設定生產環境變數
 cat > .env.production << EOF
@@ -1718,17 +1880,19 @@ HTTPS:
 ### 本地開發
 
 ```bash
-# 啟動後端 (Docker)
-cd infrastructure/docker
+# 啟動後端 (Docker) - 在 SeeSeaIntelligenceDocs 專案中
+cd ~/SeeSea/SeeSeaIntelligenceDocs/infrastructure/docker
 docker-compose up -d
 
-# 啟動前端
-cd web
+# 啟動前端 - 在 SeeSeaIntelligenceWeb 專案中
+cd ~/SeeSea/SeeSeaIntelligenceWeb
 npm run dev
 
 # 查看日誌
-docker-compose logs -f api-go
-docker-compose logs -f api-python
+cd ~/SeeSea/SeeSeaIntelligenceDocs/infrastructure/docker
+docker-compose logs -f api-go           # SeeSeaIntelligenceAPI
+docker-compose logs -f api-python       # SeeSeaIntelligenceAgent
+docker-compose logs -f data-collector   # SeeSeaIntelligence
 
 # 停止服務
 docker-compose down
@@ -1740,19 +1904,23 @@ docker-compose down
 # SSH 到 EC2
 ssh -i your-key.pem ubuntu@54.123.45.67
 
-# 更新程式碼
-cd /home/ubuntu/SeeSeaAgent
-git pull origin main
+# 更新所有專案程式碼
+cd ~/SeeSea
+git -C SeeSeaIntelligence pull origin main
+git -C SeeSeaIntelligenceAgent pull origin main
+git -C SeeSeaIntelligenceAPI pull origin main
+git -C SeeSeaIntelligenceDocs pull origin main
 
 # 重啟服務
+cd ~/SeeSea/SeeSeaIntelligenceDocs/infrastructure/docker
 docker-compose down
-docker-compose up -d
+docker-compose up -d --build
 
 # 查看狀態
 docker-compose ps
 
 # 備份資料庫
-docker-compose exec postgres pg_dump -U admin seesea > backup_$(date +%Y%m%d).sql
+docker-compose exec postgres pg_dump -U admin seesea > ~/backups/backup_$(date +%Y%m%d).sql
 ```
 
 ### SSL 續約
@@ -1808,11 +1976,18 @@ sudo certbot certificates
 
 ---
 
-**Version:** 2.0.0
+**Version:** 3.0.0 (Multi-Repo Architecture)
 **Last Updated:** 2026-02-07
 **Domain:** https://seesea.ai
 **License:** Proprietary
 
+**專案倉庫:**
+- SeeSeaIntelligence: 資料收集與處理
+- SeeSeaIntelligenceAgent: AI 分析與智能代理
+- SeeSeaIntelligenceAPI: 高性能資料查詢 API
+- SeeSeaIntelligenceWeb: 前端應用
+- SeeSeaIntelligenceDocs: 文件與基礎設施配置
+
 ---
 
-**🚀 準備好開始建構了嗎？請參考 README.md 開始開發！**
+**🚀 準備好開始建構了嗎？請參考各專案的 README.md 開始開發！**
